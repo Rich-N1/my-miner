@@ -1,6 +1,5 @@
 name: Build-Windows-Zero-Fee-Static
-# Эта строка заставит GitHub отображать ID запуска, а наш скрипт потом его "дожмет"
-run-name: Build XMRig Static - No Donate
+run-name: "Сборка XMRig..."
 
 on: 
   workflow_dispatch:
@@ -29,13 +28,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 1. Извлекаем версию
-          $content = Get-Content "CMakeLists.txt" -Raw
-          if ($content -match 'set\(VERSION "([^"]+)"\)') {
-              $X_VER = $Matches[1]
-          } else {
-              $X_VER = "Latest"
-          }
+          # 1. Извлекаем версию (самый надежный способ без регулярок)
+          $line = Get-Content "CMakeLists.txt" | Select-String 'set\(VERSION "'
+          $X_VER = $line.ToString().Split('"')[1]
           
           # 2. Запрос даты релиза
           $REL_URL = "https://api.github.com"
@@ -50,17 +45,16 @@ jobs:
           
           $FULL_NAME = "XMRig $X_VER ($FORM_DATE) no donate"
           
-          # 3. Передача переменной для названия архива
+          # Передаем переменные (Add-Content самый надежный в Win)
           Add-Content -Path $env:GITHUB_ENV -Value "FINAL_NAME=$FULL_NAME"
           
-          # 4. Обновление заголовка в списке (Display Title) через API
-          $body = @{ display_title = $FULL_NAME } | ConvertTo-Json -Compress
-          $apiUrl = "https://api.github.com"
-          
+          # 3. Обновление заголовка в списке (Display Title)
+          # Здесь исправлены кавычки для Windows
+          $body = "{`"display_title`":`"$FULL_NAME`"}"
           curl.exe -L -X PATCH `
             -H "Accept: application/vnd.github+json" `
             -H "Authorization: Bearer $($env:GH_TOKEN)" `
-            $apiUrl `
+            "https://api.github.com" `
             -d $body
 
       - name: Patch and Build
