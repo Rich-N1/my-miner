@@ -10,12 +10,14 @@ jobs:
     permissions:
       actions: write
     steps:
+      # 1. Загружаем исходники XMRig
       - name: Checkout XMRig
         uses: actions/checkout@v4
         with:
           repository: xmrig/xmrig
           fetch-depth: 1
 
+      # 2. Ставим инструменты MSYS2
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
@@ -23,22 +25,31 @@ jobs:
           update: true
           install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-make
 
+      # 3. Обнуляем комиссию и собираем один EXE
       - name: Patch and Build
         shell: msys2 {0}
         run: |
-          # 1. Обнуляем комиссию
+          # Патчим комиссию (Default 1 -> 0, Min 1 -> 0)
           sed -i 's/kDefaultDonateLevel = 1/kDefaultDonateLevel = 0/g' src/donate.h
           sed -i 's/kMinimumDonateLevel = 1/kMinimumDonateLevel = 0/g' src/donate.h
           
-          # 2. Сборка в один файл
+          # Создаем папку и запускаем компиляцию
           mkdir -p build && cd build
           export PATH="/mingw64/bin:$PATH"
-          cmake .. -G "MinGW Makefiles" -DXMRIG_DEPS=OFF -DWITH_HWLOC=OFF -DWITH_OPENSSL=OFF -DWITH_HTTP=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF -DCMAKE_EXE_LINKER_FLAGS="-static"
+          cmake .. -G "MinGW Makefiles" \
+            -DXMRIG_DEPS=OFF \
+            -DWITH_HWLOC=OFF \
+            -DWITH_OPENSSL=OFF \
+            -DWITH_HTTP=OFF \
+            -DWITH_ADL=OFF \
+            -DWITH_NVML=OFF \
+            -DCMAKE_EXE_LINKER_FLAGS="-static"
           mingw32-make -j$(nproc)
 
+      # 4. Сохраняем готовый файл
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          # Название папки/архива будет всегда четким и понятным
+          # Имя архива будет всегда одинаковым и красивым
           name: XMRig-Windows-Static-NoDonate
           path: build/xmrig.exe
