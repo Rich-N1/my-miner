@@ -24,38 +24,33 @@ jobs:
           install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-make curl jq
 
       - name: Get Info and Rename
-        shell: pwsh
+        shell: msys2 {0}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 1. Извлекаем версию (самый надежный способ без регулярок)
-          $line = Get-Content "CMakeLists.txt" | Select-String 'set\(VERSION "'
-          $X_VER = $line.ToString().Split('"')[1]
+          # 1. Извлекаем версию проверенным в MSYS2 способом
+          X_VER=$(grep -am 1 "set(VERSION" CMakeLists.txt | cut -d '"' -f 2)
+          [ -z "$X_VER" ] && X_VER="Latest"
           
           # 2. Запрос даты релиза
-          $REL_URL = "https://api.github.com"
-          $REL_DATA = curl.exe -s -L $REL_URL | ConvertFrom-Json
-          $PUB_DATE = $REL_DATA.published_at
+          REL_DATA=$(curl -s -L "https://api.github.com")
+          PUB_DATE=$(echo $REL_DATA | jq -r '.published_at' | cut -d'T' -f1)
           
-          if ($PUB_DATE) {
-              $FORM_DATE = [DateTime]::Parse($PUB_DATE).ToString("dd.MM.yyyy")
-          } else {
-              $FORM_DATE = (Get-Date).ToString("dd.MM.yyyy")
-          }
+          if [ "$PUB_DATE" != "null" ] && [ -n "$PUB_DATE" ]; then
+            FORM_DATE=$(date -d "$PUB_DATE" +"%d.%m.%Y")
+          else
+            FORM_DATE=$(date +"%d.%m.%Y")
+          fi
           
-          $FULL_NAME = "XMRig $X_VER ($FORM_DATE) no donate"
+          FULL_NAME="XMRig $X_VER ($FORM_DATE) no donate"
+          echo "FINAL_NAME=$FULL_NAME" >> $GITHUB_ENV
           
-          # Передаем переменные (Add-Content самый надежный в Win)
-          Add-Content -Path $env:GITHUB_ENV -Value "FINAL_NAME=$FULL_NAME"
-          
-          # 3. Обновление заголовка в списке (Display Title)
-          # Здесь исправлены кавычки для Windows
-          $body = "{`"display_title`":`"$FULL_NAME`"}"
-          curl.exe -L -X PATCH `
-            -H "Accept: application/vnd.github+json" `
-            -H "Authorization: Bearer $($env:GH_TOKEN)" `
-            "https://api.github.com" `
-            -d $body
+          # 3. Обновление заголовка в списке Actions (Display Title)
+          curl -L -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com{{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            -d "{\"display_title\":\"$FULL_NAME\"}"
 
       - name: Patch and Build
         shell: msys2 {0}
