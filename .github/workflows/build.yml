@@ -6,19 +6,36 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-make
+            git
+
       - name: Clone and Patch
+        shell: msys2 {0}
         run: |
-          git clone https://github.com
+          git clone https://github.com/xmrig/xmrig.git
           cd xmrig
-          (Get-Content src/donate.h) -replace 'kDefaultDonateLevel = 1', 'kDefaultDonateLevel = 0' -replace 'kMinimumDonateLevel = 1', 'kMinimumDonateLevel = 0' | Set-Content src/donate.h
+          sed -i 's/kDefaultDonateLevel = 1/kDefaultDonateLevel = 0/g' src/donate.h
+          sed -i 's/kMinimumDonateLevel = 1/kMinimumDonateLevel = 0/g' src/donate.h
+
       - name: Build
+        shell: msys2 {0}
         run: |
           cd xmrig
-          mkdir build; cd build
-          cmake .. -DXMRIG_DEPS=scripts/deps.sh -DENABLE_STATIC=ON
-          cmake --build . --config Release
+          mkdir build && cd build
+          cmake .. -G "Unix Makefiles" -DWITH_LIBCPUID=OFF
+          make -j$(nproc)
+
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: xmrig-zero-fee
-          path: xmrig/build/Release/xmrig.exe
+          path: xmrig/build/xmrig.exe
