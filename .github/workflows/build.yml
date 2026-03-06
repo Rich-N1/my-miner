@@ -1,5 +1,4 @@
 name: Build-Windows-Zero-Fee-Static
-run-name: "Подготовка..."
 
 on: 
   workflow_dispatch:
@@ -28,30 +27,32 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 1. Извлекаем версию через надежный PowerShell
+          # 1. Извлекаем версию
           $content = Get-Content "CMakeLists.txt" -Raw
           if ($content -match 'set\(VERSION "([^"]+)"\)') {
               $X_VER = $Matches[1]
           } else {
               $X_VER = "Latest"
           }
-          echo "XMRIG_VER=$X_VER" >> $env:GITHUB_ENV
           
-          # 2. Запрос даты релиза (используем стандартный curl)
+          # 2. Запрос даты релиза
           $REL_DATA = curl.exe -s "https://api.github.com" | ConvertFrom-Json
           $PUB_DATE = $REL_DATA.published_at
           
           if ($PUB_DATE) {
-              $FORM_DATE = [DateTime]::Parse($PUB_DATE).ToString("dd.mm.yyyy")
+              $FORM_DATE = [DateTime]::Parse($PUB_DATE).ToString("dd.MM.yyyy")
           } else {
-              $FORM_DATE = Get-Date -Format "dd.mm.yyyy"
+              $FORM_DATE = Get-Date -Format "dd.MM.yyyy"
           }
-          echo "RELEASE_DATE=$FORM_DATE" >> $env:GITHUB_ENV
           
           $FULL_NAME = "XMRig $X_VER ($FORM_DATE) no donate"
+          
+          # Передаем переменные в среду GitHub
+          echo "XMRIG_VER=$X_VER" >> $env:GITHUB_ENV
+          echo "RELEASE_DATE=$FORM_DATE" >> $env:GITHUB_ENV
           echo "FINAL_NAME=$FULL_NAME" >> $env:GITHUB_ENV
           
-          # 3. Переименование через API
+          # 3. Принудительное обновление заголовка запуска через API
           $body = @{ display_title = $FULL_NAME } | ConvertTo-Json
           curl.exe -L -X PATCH `
             -H "Accept: application/vnd.github+json" `
