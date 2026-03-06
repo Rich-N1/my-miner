@@ -1,5 +1,9 @@
 name: Build-Windows-Zero-Fee-Static
-on: workflow_dispatch
+# Эта строка задает имя запуска в списке Actions
+run-name: "XMRig Build: ${{ github.run_id }}"
+
+on: 
+  workflow_dispatch:
 
 jobs:
   build:
@@ -24,26 +28,28 @@ jobs:
             curl
             jq
 
-      - name: Get Version and Original Release Date
+      - name: Get Version and Date
+        id: info
         shell: msys2 {0}
         run: |
           cd xmrig
-          # 1. Извлекаем номер версии из CMakeLists.txt
+          # Извлекаем версию
           X_VER=$(grep "set(VERSION" CMakeLists.txt | cut -d '"' -f 2)
           echo "XMRIG_VER=$X_VER" >> $GITHUB_ENV
           
-          # 2. Запрашиваем дату релиза этой версии через GitHub API
-          # Мы берем дату 'published_at' для тега v6.x.x
+          # Запрашиваем дату релиза через API
           REL_DATA=$(curl -s https://api.github.com)
           PUB_DATE=$(echo $REL_DATA | jq -r '.published_at' | cut -d'T' -f1)
           
-          # 3. Форматируем дату из ГГГГ-ММ-ДД в ДД.ММ.ГГГГ
-          if [ "$PUB_DATE" != "null" ]; then
+          if [ "$PUB_DATE" != "null" ] && [ -n "$PUB_DATE" ]; then
             FORM_DATE=$(date -d "$PUB_DATE" +"%d.%m.%Y")
           else
-            FORM_DATE=$(date +"%d.%m.%Y") # запасной вариант, если API не ответит
+            FORM_DATE=$(date +"%d.%m.%Y")
           fi
           echo "RELEASE_DATE=$FORM_DATE" >> $GITHUB_ENV
+          
+          # Эта магическая команда меняет имя текущего запуска в реальном времени!
+          echo "::notice title=Build Info::XMRig $X_VER ($FORM_DATE) no donate"
 
       - name: Patch Donation
         shell: msys2 {0}
@@ -58,19 +64,12 @@ jobs:
           cd xmrig
           mkdir build && cd build
           export PATH="/mingw64/bin:$PATH"
-          cmake .. -G "MinGW Makefiles" \
-                   -DXMRIG_DEPS=OFF \
-                   -DWITH_HWLOC=OFF \
-                   -DWITH_OPENSSL=OFF \
-                   -DWITH_HTTP=OFF \
-                   -DWITH_ADL=OFF \
-                   -DWITH_NVML=OFF \
-                   -DCMAKE_EXE_LINKER_FLAGS="-static"
+          cmake .. -G "MinGW Makefiles" -DXMRIG_DEPS=OFF -DWITH_HWLOC=OFF -DWITH_OPENSSL=OFF -DWITH_HTTP=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF -DCMAKE_EXE_LINKER_FLAGS="-static"
           mingw32-make -j$(nproc)
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          # Название будет: XMRig 6.21.0 (15.05.2024) no donate
+          # Имя архива совпадет с тем, что мы вычислили
           name: XMRig ${{ env.XMRIG_VER }} (${{ env.RELEASE_DATE }}) no donate
           path: xmrig/build/xmrig.exe
