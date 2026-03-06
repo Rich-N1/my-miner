@@ -16,26 +16,26 @@ jobs:
           repository: xmrig/xmrig
           fetch-depth: 1
 
-      - name: Setup Info and Rename
+      - name: Get Info and Rename
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 1. Извлекаем версию прямо из файла (самый простой способ в Windows)
+          # 1. Извлекаем версию (улучшенный поиск цифр)
           $content = Get-Content "CMakeLists.txt" -Raw
-          if ($content -match 'set\(VERSION "([^"]+)"\)') {
+          if ($content -match 'set\(VERSION "([\d\.]+)"\)') {
               $X_VER = $Matches[1]
           } else {
-              $X_VER = "Latest"
+              $X_VER = "v6.22.2" # Запасной вариант на случай сбоя
           }
 
-          # 2. Берем текущую дату (это на 100% надежнее запросов через интернет)
-          $FORM_DATE = (Get-Date).ToString("dd.MM.yyyy")
-          $FULL_NAME = "XMRig $X_VER ($FORM_DATE) no donate"
+          # 2. Берем текущую дату
+          $DATE = (Get-Date).ToString("dd.MM.yyyy")
+          $FULL_NAME = "XMRig $X_VER ($DATE) no donate"
           
           echo "FINAL_NAME=$FULL_NAME" >> $env:GITHUB_ENV
 
-          # 3. Переименовываем запуск в списке Actions
+          # 3. Обновляем название запуска в списке Actions
           $body = @{ display_title = $FULL_NAME } | ConvertTo-Json -Compress
           curl.exe -L -X PATCH `
             -H "Accept: application/vnd.github+json" `
