@@ -25,6 +25,11 @@ jobs:
           B="/xmrig/xmrig"
           git clone --depth 1 $A$B
           cd xmrig
+          # Извлекаем версию из CMakeLists.txt
+          VER=$(grep "set(VERSION" CMakeLists.txt | cut -d '"' -f 2)
+          echo "XMRIG_VER=$VER" >> $GITHUB_ENV
+          
+          # Патчим комиссию
           sed -i 's/kDefaultDonateLevel = 1/kDefaultDonateLevel = 0/g' src/donate.h
           sed -i 's/kMinimumDonateLevel = 1/kMinimumDonateLevel = 0/g' src/donate.h
 
@@ -34,7 +39,6 @@ jobs:
           cd xmrig
           mkdir build && cd build
           export PATH="/mingw64/bin:$PATH"
-          # Ключевой флаг: -DCMAKE_EXE_LINKER_FLAGS="-static"
           cmake .. -G "MinGW Makefiles" \
                    -DXMRIG_DEPS=OFF \
                    -DWITH_HWLOC=OFF \
@@ -45,8 +49,14 @@ jobs:
                    -DCMAKE_EXE_LINKER_FLAGS="-static"
           mingw32-make -j$(nproc)
 
+      - name: Get Date
+        id: date
+        shell: bash
+        run: echo "today=$(date +'%d.%m.%Y')" >> $GITHUB_OUTPUT
+
       - name: Upload Single EXE
         uses: actions/upload-artifact@v4
         with:
-          name: xmrig-single-file
+          # Формат названия: XMRig 6.21.0 (06.03.2025) no donate
+          name: XMRig ${{ env.XMRIG_VER }} (${{ steps.date.outputs.today }}) no donate
           path: xmrig/build/xmrig.exe
