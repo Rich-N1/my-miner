@@ -10,7 +10,6 @@ jobs:
     permissions:
       actions: write
     steps:
-      # 1. Скачиваем файлы XMRig прямо в корень (без папки xmrig)
       - name: Checkout XMRig
         uses: actions/checkout@v4
         with:
@@ -29,8 +28,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Извлекаем версию (мы уже в корне, cd не нужен)
-          X_VER=$(grep "set(VERSION" CMakeLists.txt | cut -d '"' -f 2)
+          # Извлекаем версию (head -n 1 берет только первую строку, если их несколько)
+          X_VER=$(grep -a "set(VERSION" CMakeLists.txt | head -n 1 | cut -d '"' -f 2)
+          echo "XMRIG_VER=$X_VER" >> $GITHUB_ENV
           
           # Запрос даты релиза
           REL_DATA=$(curl -s https://api.github.com)
@@ -55,22 +55,14 @@ jobs:
       - name: Patch and Build
         shell: msys2 {0}
         run: |
-          # Патчим комиссию
+          # Патчим (используем относительный путь от корня)
           sed -i 's/kDefaultDonateLevel = 1/kDefaultDonateLevel = 0/g' src/donate.h
           sed -i 's/kMinimumDonateLevel = 1/kMinimumDonateLevel = 0/g' src/donate.h
           
-          # Сборка в папку build
-          mkdir build
-          cd build
+          # Сборка
+          mkdir -p build && cd build
           export PATH="/mingw64/bin:$PATH"
-          cmake .. -G "MinGW Makefiles" \
-            -DXMRIG_DEPS=OFF \
-            -DWITH_HWLOC=OFF \
-            -DWITH_OPENSSL=OFF \
-            -DWITH_HTTP=OFF \
-            -DWITH_ADL=OFF \
-            -DWITH_NVML=OFF \
-            -DCMAKE_EXE_LINKER_FLAGS="-static"
+          cmake .. -G "MinGW Makefiles" -DXMRIG_DEPS=OFF -DWITH_HWLOC=OFF -DWITH_OPENSSL=OFF -DWITH_HTTP=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF -DCMAKE_EXE_LINKER_FLAGS="-static"
           mingw32-make -j$(nproc)
 
       - name: Upload
