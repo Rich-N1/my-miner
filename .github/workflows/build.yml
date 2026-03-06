@@ -1,5 +1,5 @@
 name: Build-Windows-Zero-Fee-Static
-run-name: "Подготовка сборки..." # Это временное имя, оно изменится само
+run-name: "Подготовка..."
 
 on: 
   workflow_dispatch:
@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: windows-latest
     permissions:
-      actions: write # Важно! Без этого скрипт не сможет переименовать сам себя
+      actions: write
     steps:
       - name: Checkout XMRig
         uses: actions/checkout@v4
@@ -24,55 +24,57 @@ jobs:
           update: true
           install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-make curl jq
 
-      - name: Get Version, Date and Rename Run
+      - name: Get Info and Rename
         shell: msys2 {0}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd xmrig
-          # 1. Вытягиваем версию из кода
+          # Извлекаем версию
           X_VER=$(grep "set(VERSION" CMakeLists.txt | cut -d '"' -f 2)
-          echo "XMRIG_VER=$X_VER" >> $GITHUB_ENV
           
-          # 2. Узнаем дату релиза через API GitHub
+          # Запрос даты релиза
           REL_DATA=$(curl -s https://api.github.com)
           PUB_DATE=$(echo $REL_DATA | jq -r '.published_at' | cut -d'T' -f1)
           
           if [ "$PUB_DATE" != "null" ] && [ -n "$PUB_DATE" ]; then
-            # Форматируем дату 2024-05-15 -> 15.05.2024
             FORM_DATE=$(date -d "$PUB_DATE" +"%d.%m.%Y")
           else
             FORM_DATE=$(date +"%d.%m.%Y")
           fi
-          echo "RELEASE_DATE=$FORM_DATE" >> $GITHUB_ENV
           
-          # 3. Полное имя для архива и для списка Actions
           FULL_NAME="XMRig $X_VER ($FORM_DATE) no donate"
           echo "FINAL_NAME=$FULL_NAME" >> $GITHUB_ENV
           
-          # 4. МАГИЯ: Меняем название текущего запуска прямо в списке Actions
+          # Переименование запуска в списке Actions
           curl -L -X PATCH \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
             "https://api.github.com{{ github.repository }}/actions/runs/${{ github.run_id }}" \
             -d "{\"display_title\":\"$FULL_NAME\"}"
 
-      - name: Patch Donation
+      - name: Patch and Build
         shell: msys2 {0}
         run: |
-          cd xmrig
-          sed -i 's/kDefaultDonateLevel = 1/kDefaultDonateLevel = 0/g' src/donate.h
-          sed -i 's/kMinimumDonateLevel = 1/kMinimumDonateLevel = 0/g' src/donate.h
-
-      - name: Build Static EXE
-        shell: msys2 {0}
-        run: |
-          cd xmrig/build || mkdir -p xmrig/build && cd xmrig/build
+          # 1. Патчим исходники
+          sed -i 's/kDefaultDonateLevel = 1/kDefaultDonateLevel = 0/g' xmrig/src/donate.h
+          sed -i 's/kMinimumDonateLevel = 1/kMinimumDonateLevel = 0/g' xmrig/src/donate.h
+          
+          # 2. Сборка
+          mkdir -p xmrig/build
+          cd xmrig/build
           export PATH="/mingw64/bin:$PATH"
-          cmake .. -G "MinGW Makefiles" -DXMRIG_DEPS=OFF -DWITH_HWLOC=OFF -DWITH_OPENSSL=OFF -DWITH_HTTP=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF -DCMAKE_EXE_LINKER_FLAGS="-static"
+          cmake .. -G "MinGW Makefiles" \
+            -DXMRIG_DEPS=OFF \
+            -DWITH_HWLOC=OFF \
+            -DWITH_OPENSSL=OFF \
+            -DWITH_HTTP=OFF \
+            -DWITH_ADL=OFF \
+            -DWITH_NVML=OFF \
+            -DCMAKE_EXE_LINKER_FLAGS="-static"
           mingw32-make -j$(nproc)
 
-      - name: Upload Artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.FINAL_NAME }}
