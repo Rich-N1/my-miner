@@ -39,9 +39,18 @@ jobs:
           export PATH="/mingw64/bin:$PATH"
           cmake .. -G "MinGW Makefiles" -DXMRIG_DEPS=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF
           mingw32-make -j$(nproc)
+          # Копируем все нужные библиотеки в папку с программой
+          cp /mingw64/bin/libwinpthread-1.dll .
+          cp /mingw64/bin/libuv-1.dll .
+          cp /mingw64/bin/libssl-*.dll .
+          cp /mingw64/bin/libcrypto-*.dll .
+          cp /mingw64/bin/libstdc++-6.dll .
+          cp /mingw64/bin/libgcc_s_seh-1.dll .
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: xmrig-windows-zero-fee
-          path: xmrig/build/xmrig.exe
+          path: |
+            xmrig/build/*.exe
+            xmrig/build/*.dll
