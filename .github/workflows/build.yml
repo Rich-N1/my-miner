@@ -1,4 +1,5 @@
-name: Build-Windows-Zero-Fee-Static
+name: Build-XMRig-Zero-Fee
+run-name: "Сборка XMRig..."
 
 on: 
   workflow_dispatch:
@@ -9,36 +10,37 @@ jobs:
     permissions:
       actions: write
     steps:
-      - name: Get Latest Release Info
-        id: xmrig_info
-        uses: pozetiv/github-action-get-latest-release@v0.7.0
-        with:
-          repository: xmrig/xmrig
-          excludes: prerelease, draft
-
-      - name: Checkout XMRig
-        uses: actions/checkout@v4
-        with:
-          repository: xmrig/xmrig
-          ref: ${{ steps.xmrig_info.outputs.release }}
-          path: xmrig
-
-      - name: Setup Info and Rename
+      - name: Get Release Info
+        id: info
         shell: bash
         run: |
-          # Форматируем дату из ISO (2024-05-15T...) в DD.MM.YYYY
-          RAW_DATE="${{ steps.xmrig_info.outputs.published_at }}"
-          FORM_DATE=$(date -d "$RAW_DATE" +"%d.%m.%Y")
-          FULL_NAME="XMRig ${{ steps.xmrig_info.outputs.release }} ($FORM_DATE) no donate"
+          # 1. Получаем данные о последнем официальном релизе XMRig
+          REL_JSON=$(curl -sL https://api.github.com)
           
+          # 2. Вытаскиваем версию (TAG) и дату (DATE)
+          TAG=$(echo "$REL_JSON" | grep -oP '(?<="tag_name": ")[^"]+')
+          RAW_DATE=$(echo "$REL_JSON" | grep -oP '(?<="published_at": ")[^"T]+')
+          
+          # Форматируем дату 2024-05-15 -> 15.05.2024
+          FORM_DATE=$(date -d "$RAW_DATE" +"%d.%m.%Y")
+          FULL_NAME="XMRig $TAG ($FORM_DATE) no donate"
+          
+          echo "TAG=$TAG" >> $GITHUB_ENV
           echo "FINAL_NAME=$FULL_NAME" >> $GITHUB_ENV
           
-          # Переименовываем запуск в списке Actions через API
+          # 3. Обновляем название текущего запуска в списке Actions
           curl -L -X PATCH \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ github.token }}" \
             "https://api.github.com{{ github.repository }}/actions/runs/${{ github.run_id }}" \
             -d "{\"display_title\":\"$FULL_NAME\"}"
+
+      - name: Checkout XMRig
+        uses: actions/checkout@v4
+        with:
+          repository: xmrig/xmrig
+          ref: ${{ env.TAG }}
+          fetch-depth: 1
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
@@ -50,19 +52,19 @@ jobs:
       - name: Patch and Build
         shell: msys2 {0}
         run: |
-          cd xmrig
-          # Патчим комиссию
+          # Обнуляем комиссию
           sed -i 's/kDefaultDonateLevel = 1/kDefaultDonateLevel = 0/g' src/donate.h
           sed -i 's/kMinimumDonateLevel = 1/kMinimumDonateLevel = 0/g' src/donate.h
           
-          # Собираем
+          # Сборка одного EXE
           mkdir -p build && cd build
           export PATH="/mingw64/bin:$PATH"
           cmake .. -G "MinGW Makefiles" -DXMRIG_DEPS=OFF -DWITH_HWLOC=OFF -DWITH_OPENSSL=OFF -DWITH_HTTP=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF -DCMAKE_EXE_LINKER_FLAGS="-static"
           mingw32-make -j$(nproc)
 
-      - name: Upload Artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
+          # Имя архива будет: XMRig v6.22.2 (15.05.2024) no donate
           name: ${{ env.FINAL_NAME }}
-          path: xmrig/build/xmrig.exe
+          path: build/xmrig.exe
