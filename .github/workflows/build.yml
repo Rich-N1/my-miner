@@ -34,24 +34,21 @@ jobs:
           cd xmrig
           mkdir build && cd build
           export PATH="/mingw64/bin:$PATH"
-          # Отключаем всё лишнее, чтобы сборка не ломалась
+          # Используем базовые настройки, отключая только видеокарты
           cmake .. -G "MinGW Makefiles" \
-                   -DXMRIG_DEPS=OFF \
-                   -DWITH_LIBCPUID=OFF \
                    -DWITH_ADL=OFF \
                    -DWITH_NVML=OFF \
+                   -DWITH_OPENSSL=OFF \
                    -DWITH_HTTP=OFF \
-                   -DWITH_OPENSSL=OFF
+                   -DBUILD_STATIC=OFF
           mingw32-make -j$(nproc)
-          # Копируем минимальные системные библиотеки
-          cp /mingw64/bin/libwinpthread-1.dll .
-          cp /mingw64/bin/libstdc++-6.dll .
-          cp /mingw64/bin/libgcc_s_seh-1.dll .
+          # Копируем всё, что нужно для запуска
+          cp /mingw64/bin/*.dll . || true
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: xmrig-windows-zero-fee
           path: |
-            xmrig/build/*.exe
+            xmrig/build/xmrig.exe
             xmrig/build/*.dll
