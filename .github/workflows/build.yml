@@ -27,16 +27,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 1. Извлекаем ЧИСТУЮ версию
-          $file = Get-Content "CMakeLists.txt" -Raw
-          if ($file -match 'set\(VERSION "([^"]+)"\)') {
+          # 1. Извлекаем версию (Метод с четким индексом группы)
+          $content = Get-Content "CMakeLists.txt" -Raw
+          if ($content -match 'set\(VERSION "([^"]+)"\)') {
               $X_VER = $Matches[1]
           } else {
-              $X_VER = "Unknown"
+              $X_VER = "6.22.2"
           }
           
-          # 2. Запрос даты оригинального релиза
-          $REL_DATA = curl.exe -s -L "https://api.github.com" | ConvertFrom-Json
+          # 2. Запрос даты релиза
+          $REL_URL = "https://api.github.com"
+          $REL_DATA = curl.exe -s -L $REL_URL | ConvertFrom-Json
           $PUB_DATE = $REL_DATA.published_at
           
           if ($PUB_DATE) {
@@ -47,12 +48,10 @@ jobs:
           
           $FULL_NAME = "XMRig $X_VER ($FORM_DATE) no donate"
           
-          # 3. Передача переменных
-          Add-Content -Path $env:GITHUB_ENV -Value "XMRIG_VER=$X_VER"
-          Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_DATE=$FORM_DATE"
+          # 3. Передача переменных (Важно для Upload)
           Add-Content -Path $env:GITHUB_ENV -Value "FINAL_NAME=$FULL_NAME"
           
-          # 4. Обновление заголовка в списке Actions
+          # 4. Обновление заголовка в списке Actions (Display Title)
           $body = @{ display_title = $FULL_NAME } | ConvertTo-Json -Compress
           curl.exe -L -X PATCH `
             -H "Accept: application/vnd.github+json" `
