@@ -21,18 +21,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 1. Извлекаем версию (улучшенный поиск цифр)
+          # 1. Извлекаем версию (улучшенный поиск для 6.25.0)
           $content = Get-Content "CMakeLists.txt" -Raw
-          if ($content -match 'set\(VERSION "([\d\.]+)"\)') {
+          if ($content -match 'set\(VERSION "([^"]+)"\)') {
               $X_VER = $Matches[1]
           } else {
-              $X_VER = "v6.22.2" # Запасной вариант на случай сбоя
+              $X_VER = "6.25.0"
           }
 
           # 2. Берем текущую дату
           $DATE = (Get-Date).ToString("dd.MM.yyyy")
           $FULL_NAME = "XMRig $X_VER ($DATE) no donate"
           
+          # Сохраняем имя для архива
           echo "FINAL_NAME=$FULL_NAME" >> $env:GITHUB_ENV
 
           # 3. Обновляем название запуска в списке Actions
@@ -53,9 +54,11 @@ jobs:
       - name: Patch and Build
         shell: msys2 {0}
         run: |
+          # Обнуляем комиссию
           sed -i 's/kDefaultDonateLevel = 1/kDefaultDonateLevel = 0/g' src/donate.h
           sed -i 's/kMinimumDonateLevel = 1/kMinimumDonateLevel = 0/g' src/donate.h
-          mkdir build && cd build
+          
+          mkdir -p build && cd build
           export PATH="/mingw64/bin:$PATH"
           cmake .. -G "MinGW Makefiles" -DXMRIG_DEPS=OFF -DWITH_HWLOC=OFF -DWITH_OPENSSL=OFF -DWITH_HTTP=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF -DCMAKE_EXE_LINKER_FLAGS="-static"
           mingw32-make -j$(nproc)
