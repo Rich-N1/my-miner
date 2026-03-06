@@ -5,7 +5,6 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      # Загружаем XMRig встроенным методом GitHub
       - name: Checkout XMRig
         uses: actions/checkout@v4
         with:
@@ -22,6 +21,29 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-make
+            curl
+            jq
+
+      - name: Get Version and Original Release Date
+        shell: msys2 {0}
+        run: |
+          cd xmrig
+          # 1. Извлекаем номер версии из CMakeLists.txt
+          X_VER=$(grep "set(VERSION" CMakeLists.txt | cut -d '"' -f 2)
+          echo "XMRIG_VER=$X_VER" >> $GITHUB_ENV
+          
+          # 2. Запрашиваем дату релиза этой версии через GitHub API
+          # Мы берем дату 'published_at' для тега v6.x.x
+          REL_DATA=$(curl -s https://api.github.com)
+          PUB_DATE=$(echo $REL_DATA | jq -r '.published_at' | cut -d'T' -f1)
+          
+          # 3. Форматируем дату из ГГГГ-ММ-ДД в ДД.ММ.ГГГГ
+          if [ "$PUB_DATE" != "null" ]; then
+            FORM_DATE=$(date -d "$PUB_DATE" +"%d.%m.%Y")
+          else
+            FORM_DATE=$(date +"%d.%m.%Y") # запасной вариант, если API не ответит
+          fi
+          echo "RELEASE_DATE=$FORM_DATE" >> $GITHUB_ENV
 
       - name: Patch Donation
         shell: msys2 {0}
@@ -46,13 +68,9 @@ jobs:
                    -DCMAKE_EXE_LINKER_FLAGS="-static"
           mingw32-make -j$(nproc)
 
-      - name: Get Date
-        id: date
-        shell: bash
-        run: echo "today=$(date +'%d.%m.%Y')" >> $GITHUB_OUTPUT
-
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: XMRig (${{ steps.date.outputs.today }}) no donate
+          # Название будет: XMRig 6.21.0 (15.05.2024) no donate
+          name: XMRig ${{ env.XMRIG_VER }} (${{ env.RELEASE_DATE }}) no donate
           path: xmrig/build/xmrig.exe
