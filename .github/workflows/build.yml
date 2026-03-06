@@ -36,8 +36,9 @@ jobs:
         run: |
           cd xmrig
           mkdir build && cd build
-          cmake .. -G "Unix Makefiles" -DXMRIG_DEPS=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF
-          make -j$(nproc)
+          export PATH="/mingw64/bin:$PATH"
+          cmake .. -G "MinGW Makefiles" -DXMRIG_DEPS=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF
+          mingw32-make -j$(nproc)
 
       - name: Upload
         uses: actions/upload-artifact@v4
