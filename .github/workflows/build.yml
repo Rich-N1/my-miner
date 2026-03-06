@@ -12,30 +12,40 @@ jobs:
         with:
           msystem: MINGW64
           update: true
+          # Устанавливаем ВСЕ необходимые библиотеки
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-make
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-libuv
+            mingw-w64-x86_64-hwloc
             git
 
       - name: Clone and Patch
         shell: msys2 {0}
         run: |
-          git clone https://github.com/xmrig/xmrig.git
+          git clone --depth 1 https://github.com
           cd xmrig
-          sed -i 's/kDefaultDonateLevel = 1/kDefaultDonateLevel = 0/g' src/donate.h
-          sed -i 's/kMinimumDonateLevel = 1/kMinimumDonateLevel = 0/g' src/donate.h
+          # Жесткая замена комиссии на 0
+          sed -i 's/kDefaultDonateLevel = [0-9]/kDefaultDonateLevel = 0/g' src/donate.h
+          sed -i 's/kMinimumDonateLevel = [0-9]/kMinimumDonateLevel = 0/g' src/donate.h
 
       - name: Build
         shell: msys2 {0}
         run: |
           cd xmrig
           mkdir build && cd build
-          cmake .. -G "Unix Makefiles" -DWITH_LIBCPUID=OFF
+          # Отключаем расширенные фичи, которые могут вызвать ошибки при статической сборке
+          cmake .. -G "Unix Makefiles" \
+                   -DXMRIG_DEPS=OFF \
+                   -DBUILD_STATIC=ON \
+                   -DWITH_ADL=OFF \
+                   -DWITH_NVML=OFF
           make -j$(nproc)
 
-      - name: Upload
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xmrig-zero-fee
+          name: xmrig-windows-zero-fee
           path: xmrig/build/xmrig.exe
