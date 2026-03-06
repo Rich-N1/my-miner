@@ -16,48 +16,53 @@ jobs:
           repository: xmrig/xmrig
           fetch-depth: 1
 
+      - name: Get Version and Date
+        id: info
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 1. Читаем файл и ищем версию (самый простой способ в Windows)
+          $txt = Get-Content "CMakeLists.txt" -Raw
+          $X_VER = "6.22.2" # Запасной вариант
+          if ($txt -match 'set\(VERSION "([^"]+)"\)') {
+              $X_VER = $Matches[1]
+          }
+          
+          # 2. Запрос даты релиза через API
+          $REL_DATA = curl.exe -s -L "https://api.github.com" | ConvertFrom-Json
+          $PUB_DATE = $REL_DATA.published_at
+          if ($PUB_DATE) {
+              $FORM_DATE = [DateTime]::Parse($PUB_DATE).ToString("dd.MM.yyyy")
+          } else {
+              $FORM_DATE = (Get-Date).ToString("dd.MM.yyyy")
+          }
+          
+          $FULL_NAME = "XMRig $X_VER ($FORM_DATE) no donate"
+          
+          # Сохраняем в окружение GitHub
+          "FINAL_NAME=$FULL_NAME" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          
+          # 3. Переименовываем запуск в списке Actions
+          $body = @{ display_title = $FULL_NAME } | ConvertTo-Json -Compress
+          curl.exe -L -X PATCH `
+            -H "Accept: application/vnd.github+json" `
+            -H "Authorization: Bearer $env:GH_TOKEN" `
+            "https://api.github.com" `
+            -d $body
+
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
           update: true
-          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-make curl jq
-
-      - name: Get Info and Rename
-        shell: msys2 {0}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # 1. Извлекаем версию проверенным в MSYS2 способом
-          X_VER=$(grep -am 1 "set(VERSION" CMakeLists.txt | cut -d '"' -f 2)
-          [ -z "$X_VER" ] && X_VER="Latest"
-          
-          # 2. Запрос даты релиза
-          REL_DATA=$(curl -s -L "https://api.github.com")
-          PUB_DATE=$(echo $REL_DATA | jq -r '.published_at' | cut -d'T' -f1)
-          
-          if [ "$PUB_DATE" != "null" ] && [ -n "$PUB_DATE" ]; then
-            FORM_DATE=$(date -d "$PUB_DATE" +"%d.%m.%Y")
-          else
-            FORM_DATE=$(date +"%d.%m.%Y")
-          fi
-          
-          FULL_NAME="XMRig $X_VER ($FORM_DATE) no donate"
-          echo "FINAL_NAME=$FULL_NAME" >> $GITHUB_ENV
-          
-          # 3. Обновление заголовка в списке Actions (Display Title)
-          curl -L -X PATCH \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            "https://api.github.com{{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            -d "{\"display_title\":\"$FULL_NAME\"}"
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-make
 
       - name: Patch and Build
         shell: msys2 {0}
         run: |
           sed -i 's/kDefaultDonateLevel = 1/kDefaultDonateLevel = 0/g' src/donate.h
           sed -i 's/kMinimumDonateLevel = 1/kMinimumDonateLevel = 0/g' src/donate.h
-          
           mkdir -p build && cd build
           export PATH="/mingw64/bin:$PATH"
           cmake .. -G "MinGW Makefiles" -DXMRIG_DEPS=OFF -DWITH_HWLOC=OFF -DWITH_OPENSSL=OFF -DWITH_HTTP=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF -DCMAKE_EXE_LINKER_FLAGS="-static"
