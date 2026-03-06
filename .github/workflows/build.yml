@@ -12,7 +12,6 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          # Устанавливаем ВСЕ необходимые библиотеки
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
@@ -25,9 +24,9 @@ jobs:
       - name: Clone and Patch
         shell: msys2 {0}
         run: |
+          # Исправленная ссылка:
           git clone --depth 1 https://github.com
           cd xmrig
-          # Жесткая замена комиссии на 0
           sed -i 's/kDefaultDonateLevel = [0-9]/kDefaultDonateLevel = 0/g' src/donate.h
           sed -i 's/kMinimumDonateLevel = [0-9]/kMinimumDonateLevel = 0/g' src/donate.h
 
@@ -36,12 +35,7 @@ jobs:
         run: |
           cd xmrig
           mkdir build && cd build
-          # Отключаем расширенные фичи, которые могут вызвать ошибки при статической сборке
-          cmake .. -G "Unix Makefiles" \
-                   -DXMRIG_DEPS=OFF \
-                   -DBUILD_STATIC=ON \
-                   -DWITH_ADL=OFF \
-                   -DWITH_NVML=OFF
+          cmake .. -G "Unix Makefiles" -DXMRIG_DEPS=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF
           make -j$(nproc)
 
       - name: Upload Artifact
