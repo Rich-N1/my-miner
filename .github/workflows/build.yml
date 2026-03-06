@@ -1,5 +1,5 @@
 name: Build-Windows-Zero-Fee-Static
-run-name: "Сборка XMRig..."
+run-name: "XMRig Static Build (No Donate)"
 
 on: 
   workflow_dispatch:
@@ -16,41 +16,6 @@ jobs:
           repository: xmrig/xmrig
           fetch-depth: 1
 
-      - name: Get Version and Date
-        id: info
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # 1. Читаем файл и ищем версию (самый простой способ в Windows)
-          $txt = Get-Content "CMakeLists.txt" -Raw
-          $X_VER = "6.22.2" # Запасной вариант
-          if ($txt -match 'set\(VERSION "([^"]+)"\)') {
-              $X_VER = $Matches[1]
-          }
-          
-          # 2. Запрос даты релиза через API
-          $REL_DATA = curl.exe -s -L "https://api.github.com" | ConvertFrom-Json
-          $PUB_DATE = $REL_DATA.published_at
-          if ($PUB_DATE) {
-              $FORM_DATE = [DateTime]::Parse($PUB_DATE).ToString("dd.MM.yyyy")
-          } else {
-              $FORM_DATE = (Get-Date).ToString("dd.MM.yyyy")
-          }
-          
-          $FULL_NAME = "XMRig $X_VER ($FORM_DATE) no donate"
-          
-          # Сохраняем в окружение GitHub
-          "FINAL_NAME=$FULL_NAME" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          
-          # 3. Переименовываем запуск в списке Actions
-          $body = @{ display_title = $FULL_NAME } | ConvertTo-Json -Compress
-          curl.exe -L -X PATCH `
-            -H "Accept: application/vnd.github+json" `
-            -H "Authorization: Bearer $env:GH_TOKEN" `
-            "https://api.github.com" `
-            -d $body
-
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
@@ -61,8 +26,11 @@ jobs:
       - name: Patch and Build
         shell: msys2 {0}
         run: |
+          # 1. Обнуляем комиссию
           sed -i 's/kDefaultDonateLevel = 1/kDefaultDonateLevel = 0/g' src/donate.h
           sed -i 's/kMinimumDonateLevel = 1/kMinimumDonateLevel = 0/g' src/donate.h
+          
+          # 2. Сборка в один файл
           mkdir -p build && cd build
           export PATH="/mingw64/bin:$PATH"
           cmake .. -G "MinGW Makefiles" -DXMRIG_DEPS=OFF -DWITH_HWLOC=OFF -DWITH_OPENSSL=OFF -DWITH_HTTP=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF -DCMAKE_EXE_LINKER_FLAGS="-static"
@@ -71,5 +39,6 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.FINAL_NAME }}
+          # Название папки/архива будет всегда четким и понятным
+          name: XMRig-Windows-Static-NoDonate
           path: build/xmrig.exe
