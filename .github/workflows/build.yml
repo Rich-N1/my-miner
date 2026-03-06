@@ -16,6 +16,7 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-make
+            mingw-w64-x86_64-hwloc
             git
 
       - name: Clone and Patch
@@ -34,21 +35,24 @@ jobs:
           cd xmrig
           mkdir build && cd build
           export PATH="/mingw64/bin:$PATH"
-          # Используем базовые настройки, отключая только видеокарты
+          # Добавили флаг отключения HWLOC, если он не найдется, и OpenSSL/HTTP для стабильности
           cmake .. -G "MinGW Makefiles" \
-                   -DWITH_ADL=OFF \
-                   -DWITH_NVML=OFF \
+                   -DXMRIG_DEPS=OFF \
+                   -DWITH_HWLOC=OFF \
                    -DWITH_OPENSSL=OFF \
                    -DWITH_HTTP=OFF \
-                   -DBUILD_STATIC=OFF
+                   -DWITH_ADL=OFF \
+                   -DWITH_NVML=OFF
           mingw32-make -j$(nproc)
-          # Копируем всё, что нужно для запуска
-          cp /mingw64/bin/*.dll . || true
+          # Копируем библиотеки, которые могут понадобиться
+          cp /mingw64/bin/libwinpthread-1.dll .
+          cp /mingw64/bin/libstdc++-6.dll .
+          cp /mingw64/bin/libgcc_s_seh-1.dll .
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: xmrig-windows-zero-fee
           path: |
-            xmrig/build/xmrig.exe
+            xmrig/build/*.exe
             xmrig/build/*.dll
