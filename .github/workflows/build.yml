@@ -16,9 +16,6 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-make
-            mingw-w64-x86_64-openssl
-            mingw-w64-x86_64-libuv
-            mingw-w64-x86_64-hwloc
             git
 
       - name: Clone and Patch
@@ -37,13 +34,17 @@ jobs:
           cd xmrig
           mkdir build && cd build
           export PATH="/mingw64/bin:$PATH"
-          cmake .. -G "MinGW Makefiles" -DXMRIG_DEPS=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF
+          # Отключаем всё лишнее, чтобы сборка не ломалась
+          cmake .. -G "MinGW Makefiles" \
+                   -DXMRIG_DEPS=OFF \
+                   -DWITH_LIBCPUID=OFF \
+                   -DWITH_ADL=OFF \
+                   -DWITH_NVML=OFF \
+                   -DWITH_HTTP=OFF \
+                   -DWITH_OPENSSL=OFF
           mingw32-make -j$(nproc)
-          # Копируем все нужные библиотеки в папку с программой
+          # Копируем минимальные системные библиотеки
           cp /mingw64/bin/libwinpthread-1.dll .
-          cp /mingw64/bin/libuv-1.dll .
-          cp /mingw64/bin/libssl-*.dll .
-          cp /mingw64/bin/libcrypto-*.dll .
           cp /mingw64/bin/libstdc++-6.dll .
           cp /mingw64/bin/libgcc_s_seh-1.dll .
 
