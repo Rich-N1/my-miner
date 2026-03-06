@@ -12,28 +12,31 @@ jobs:
     steps:
       - name: Get Release Info
         id: info
-        shell: bash
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # 1. Получаем данные о последнем официальном релизе XMRig
-          REL_JSON=$(curl -sL https://api.github.com)
+          # 1. Получаем данные о релизе через PowerShell (надёжнее для Windows)
+          $uri = "https://api.github.com"
+          $rel = Invoke-RestMethod -Uri $uri
           
-          # 2. Вытаскиваем версию (TAG) и дату (DATE)
-          TAG=$(echo "$REL_JSON" | grep -oP '(?<="tag_name": ")[^"]+')
-          RAW_DATE=$(echo "$REL_JSON" | grep -oP '(?<="published_at": ")[^"T]+')
+          $TAG = $rel.tag_name
+          $RAW_DATE = $rel.published_at # Формат: 2024-05-15T...
+          $FORM_DATE = [DateTime]::Parse($RAW_DATE).ToString("dd.MM.yyyy")
           
-          # Форматируем дату 2024-05-15 -> 15.05.2024
-          FORM_DATE=$(date -d "$RAW_DATE" +"%d.%m.%Y")
-          FULL_NAME="XMRig $TAG ($FORM_DATE) no donate"
+          $FULL_NAME = "XMRig $TAG ($FORM_DATE) no donate"
           
-          echo "TAG=$TAG" >> $GITHUB_ENV
-          echo "FINAL_NAME=$FULL_NAME" >> $GITHUB_ENV
+          # Сохраняем переменные
+          echo "TAG=$TAG" >> $env:GITHUB_ENV
+          echo "FINAL_NAME=$FULL_NAME" >> $env:GITHUB_ENV
           
-          # 3. Обновляем название текущего запуска в списке Actions
-          curl -L -X PATCH \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ github.token }}" \
-            "https://api.github.com{{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            -d "{\"display_title\":\"$FULL_NAME\"}"
+          # 2. Обновляем название запуска в списке Actions
+          $body = @{ display_title = $FULL_NAME } | ConvertTo-Json -Compress
+          curl.exe -L -X PATCH `
+            -H "Accept: application/vnd.github+json" `
+            -H "Authorization: Bearer $($env:GH_TOKEN)" `
+            "https://api.github.com" `
+            -d $body
 
       - name: Checkout XMRig
         uses: actions/checkout@v4
@@ -52,11 +55,9 @@ jobs:
       - name: Patch and Build
         shell: msys2 {0}
         run: |
-          # Обнуляем комиссию
           sed -i 's/kDefaultDonateLevel = 1/kDefaultDonateLevel = 0/g' src/donate.h
           sed -i 's/kMinimumDonateLevel = 1/kMinimumDonateLevel = 0/g' src/donate.h
           
-          # Сборка одного EXE
           mkdir -p build && cd build
           export PATH="/mingw64/bin:$PATH"
           cmake .. -G "MinGW Makefiles" -DXMRIG_DEPS=OFF -DWITH_HWLOC=OFF -DWITH_OPENSSL=OFF -DWITH_HTTP=OFF -DWITH_ADL=OFF -DWITH_NVML=OFF -DCMAKE_EXE_LINKER_FLAGS="-static"
@@ -65,6 +66,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          # Имя архива будет: XMRig v6.22.2 (15.05.2024) no donate
           name: ${{ env.FINAL_NAME }}
           path: build/xmrig.exe
